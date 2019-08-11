@@ -10,6 +10,10 @@ using Newtonsoft.Json.Linq;
 using Surging.Core.CPlatform;
 using Surging.Core.CPlatform.Ioc;
 using Surging.Core.ProxyGenerator;
+using Surging.Core.KestrelHttpServer.Internal;
+using System.IO;
+using Surging.Core.KestrelHttpServer;
+using Surging.Core.Common;
 
 namespace Surging.Modules.Common.Domain
 {
@@ -22,7 +26,7 @@ namespace Surging.Modules.Common.Domain
         {
             this._repository = repository;
         }
-        
+
         public Task<string> GetUserName(int id)
         {
             return GetService<IUserService>("User").GetUserName(id);
@@ -62,10 +66,20 @@ namespace Surging.Modules.Common.Domain
             return Task.FromResult(true);
         }
 
+
+        public Task<UserModel> GetUserById(Guid id)
+        {
+            return Task.FromResult(new UserModel
+            {
+
+            });
+        }
+
         public Task<bool> GetDictionary()
         {
             return Task.FromResult<bool>(true);
         }
+
 
         public async Task Try()
         {
@@ -96,6 +110,59 @@ namespace Surging.Modules.Common.Domain
         public Task<IdentityUser> Save(IdentityUser requestData)
         {
             return Task.FromResult(requestData);
+        }
+
+        public Task<ApiResult<UserModel>> GetApiResult()
+        {
+            return Task.FromResult(new ApiResult<UserModel>() { Value = new UserModel { Name = "fanly" }, StatusCode=200 });
+        }
+
+        public   Task<string> GetUser(List<int> idList)
+        {
+            return Task.FromResult("type is List<int>");
+        }
+
+        public async Task<bool> UploadFile(HttpFormCollection form)
+        {
+            var files = form.Files;
+            foreach (var file in files)
+            {
+                using (var stream = new FileStream(Path.Combine(AppContext.BaseDirectory, file.FileName), FileMode.Create))
+                {
+                    await stream.WriteAsync(file.File, 0, (int)file.Length);
+                }
+            }
+            return true;
+        }
+
+        public async Task<IActionResult> DownFile(string fileName, string contentType)
+        {
+            string uploadPath = Path.Combine("C:", fileName);
+            if (File.Exists(uploadPath))
+            {
+                using (var stream = new FileStream(uploadPath, FileMode.Open))
+                {
+
+                    var bytes = new Byte[stream.Length];
+                    await stream.WriteAsync(bytes, 0, bytes.Length);
+                    return new FileContentResult(bytes, contentType, fileName);
+                }
+            }
+            else
+            {
+                throw new FileNotFoundException(fileName);
+            }
+
+        }
+
+        public async Task<Sex> SetSex(Sex sex)
+        {
+            return await Task.FromResult(sex);
+        }
+
+        public async Task<Dictionary<string, object>> GetAllThings()
+        {
+            return await Task.FromResult(new Dictionary<string, object> { { "aaa", 12 } });
         }
 
         #endregion Implementation of IUserService

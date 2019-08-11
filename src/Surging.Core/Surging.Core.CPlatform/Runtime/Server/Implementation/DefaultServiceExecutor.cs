@@ -1,16 +1,17 @@
 ﻿using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Surging.Core.CPlatform.Filters;
 using Surging.Core.CPlatform.Messages;
+using Surging.Core.CPlatform.Routing;
+using Surging.Core.CPlatform.Runtime.Client;
 using Surging.Core.CPlatform.Transport;
+using Surging.Core.CPlatform.Transport.Implementation;
+using Surging.Core.CPlatform.Utilities;
 using System;
 using System.Reflection;
-using System.Threading.Tasks;
-using System.Linq;
-using Surging.Core.CPlatform.Filters.Implementation;
-using Surging.Core.CPlatform.Filters;
+using System.Runtime.CompilerServices;
 using System.Threading;
-using Surging.Core.CPlatform.Routing;
- using Surging.Core.CPlatform;
-using Newtonsoft.Json;
+using System.Threading.Tasks;
 
 namespace Surging.Core.CPlatform.Runtime.Server.Implementation
 {
@@ -49,12 +50,12 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation
         public async Task ExecuteAsync(IMessageSender sender, TransportMessage message)
         {
 
-            if (_logger.IsEnabled(LogLevel.Information))
-                _logger.LogInformation("接收到消息。");
+            if (_logger.IsEnabled(LogLevel.Trace))
+                _logger.LogTrace("服务提供者接收到消息。");
 
             if (!message.IsInvokeMessage())
                 return;
-
+          
             RemoteInvokeMessage remoteInvokeMessage;
             try
             {
@@ -74,7 +75,12 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation
                     _logger.LogError($"根据服务Id：{remoteInvokeMessage.ServiceId}，找不到服务条目。");
                 return;
             }
-            
+
+            if(remoteInvokeMessage.Attachments !=null)
+            {
+                foreach(var attachment in remoteInvokeMessage.Attachments)
+                RpcContext.GetContext().SetAttachment(attachment.Key,attachment.Value);
+            }
 
             if (_logger.IsEnabled(LogLevel.Debug))
                 _logger.LogDebug("准备执行本地逻辑。");
@@ -110,58 +116,36 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation
         {
             try
             {
-                var cancelTokenSource = new CancellationTokenSource();
-                await OnAuthorization(entry, remoteInvokeMessage, resultMessage, cancelTokenSource);
-                if (!cancelTokenSource.IsCancellationRequested)
-                {
-                    var result = await entry.Func(remoteInvokeMessage.ServiceKey, remoteInvokeMessage.Parameters);
-                    var task = result as Task;
+                var result = await entry.Func(remoteInvokeMessage.ServiceKey, remoteInvokeMessage.Parameters);
+                var task = result as Task;
 
-                    if (task == null)
-                    {
-                        resultMessage.Result = result;
-                    }
-                    else
-                    {
-                        task.Wait();
-                        var taskType = task.GetType().GetTypeInfo();
-                        if (taskType.IsGenericType)
-                            resultMessage.Result = taskType.GetProperty("Result").GetValue(task);
-                    }
-                 
-                    if(remoteInvokeMessage.DecodeJOject && !(resultMessage.Result is IConvertible && typeof(IConvertible).GetTypeInfo().IsAssignableFrom(resultMessage.Result.GetType())))
-                    {
-                        resultMessage.Result = JsonConvert.SerializeObject(resultMessage.Result);
-                    }
+                if (task == null)
+                {
+                    resultMessage.Result = result;
+                }
+                else
+                {
+                    if (!task.IsCompletedSuccessfully)
+                        await task;
+                    var taskType = task.GetType().GetTypeInfo();
+                    if (taskType.IsGenericType)
+                        resultMessage.Result = taskType.GetProperty("Result").GetValue(task);
+                }
+
+                if (remoteInvokeMessage.DecodeJOject && !(resultMessage.Result is IConvertible && UtilityType.ConvertibleType.GetTypeInfo().IsAssignableFrom(resultMessage.Result.GetType())))
+                {
+                    resultMessage.Result = JsonConvert.SerializeObject(resultMessage.Result);
                 }
             }
             catch (Exception exception)
             {
                 if (_logger.IsEnabled(LogLevel.Error))
-                    _logger.LogError(exception,"执行本地逻辑时候发生了错误。");
+                    _logger.LogError(exception, "执行本地逻辑时候发生了错误。");
                 resultMessage.ExceptionMessage = GetExceptionMessage(exception);
-            }
-        }
-
-        private  async Task OnAuthorization(ServiceEntry entry, RemoteInvokeMessage remoteInvokeMessage,
-            RemoteInvokeResultMessage resultMessage, CancellationTokenSource cancelTokenSource)
-        {
-            if (entry.Descriptor.EnableAuthorization() && entry.Descriptor.AuthType() ==AuthorizationType.AppSecret.ToString())
-            {
-                var route = await _serviceRouteProvider.Locate(entry.Descriptor.Id);
-                var routeContext = new ServiceRouteContext()
-                {
-                    Route = route,
-                    InvokeMessage = remoteInvokeMessage,
-                    ResultMessage = resultMessage,
-                };
-                 _authorizationFilter.ExecuteAuthorizationFilterAsync(routeContext, cancelTokenSource.Token);
-                if (!string.IsNullOrEmpty(resultMessage.ExceptionMessage))
-                    cancelTokenSource.Cancel();
+                resultMessage.StatusCode = exception.HResult;
             }
         }
          
-
         private async Task SendRemoteInvokeResult(IMessageSender sender, string messageId, RemoteInvokeResultMessage resultMessage)
         {
             try
@@ -178,7 +162,7 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation
                 if (_logger.IsEnabled(LogLevel.Error))
                     _logger.LogError(exception,"发送响应消息时候发生了异常。" );
             }
-        }
+        } 
 
         private static string GetExceptionMessage(Exception exception)
         {

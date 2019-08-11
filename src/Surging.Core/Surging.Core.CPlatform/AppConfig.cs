@@ -19,8 +19,11 @@ namespace Surging.Core.CPlatform
         private static SurgingServerOptions _serverOptions=new SurgingServerOptions();
         #endregion
 
-        internal static IConfigurationRoot Configuration { get; set; }
+        public static IConfigurationRoot Configuration { get; internal set; }
 
+        /// <summary>
+        /// 负载均衡模式
+        /// </summary>
         public static AddressSelectorMode LoadBalanceMode
         {
             get
@@ -38,6 +41,11 @@ namespace Surging.Core.CPlatform
             {
                 _loadBalanceMode = value;
             }
+        }
+
+        public static IConfigurationSection GetSection(string name)
+        {
+            return Configuration?.GetSection(name);
         }
 
         public static SurgingServerOptions ServerOptions

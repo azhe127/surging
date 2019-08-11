@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Surging.Core.EventBusKafka.Configurations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,25 +12,34 @@ namespace Surging.Core.EventBusKafka
 
         public static IConfigurationRoot Configuration { get; set; }
 
-        private static IEnumerable<KeyValuePair<string, object>> _kafkaConfig;
+        public static KafkaOptions  Options { get; internal set; }
 
-        public static IEnumerable<KeyValuePair<string, object>> KafkaConfig
+        private static IEnumerable<KeyValuePair<string, object>> _kafkaConsumerConfig;
+
+
+        private static IEnumerable<KeyValuePair<string, object>> _kafkaProducerConfig;
+
+        public static IEnumerable<KeyValuePair<string, object>> KafkaConsumerConfig
         {
-
             get
             {
-                if (_kafkaConfig == null)
-                {
-                    _kafkaConfig = new Dictionary<string, object>()
-                    {
-                        {"bootstrap.servers","127.0.0.1"},
-                        { "queue.buffering.max.ms","10" },
-                         {"socket.blocking.max.ms","10"},
-                        { "enable.auto.commit","false"},
-                        {"log.connection.close","false"}
-                    }.AsEnumerable();
-                }
-                return _kafkaConfig;
+                return _kafkaConsumerConfig;
+            }
+            internal set
+            {
+                _kafkaConsumerConfig = value;
+            }
+        }
+
+        public static IEnumerable<KeyValuePair<string, object>> KafkaProducerConfig
+        {
+            get
+            {
+                return _kafkaProducerConfig;
+            }
+            internal set
+            {
+                _kafkaProducerConfig = value;
             }
         }
     }

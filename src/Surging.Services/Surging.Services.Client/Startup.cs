@@ -4,11 +4,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Surging.Apm.Skywalking.Abstractions.Common.Tracing;
+using Surging.Apm.Skywalking.Abstractions.Tracing;
+using Surging.Apm.Skywalking.Abstractions.Tracing.Segments;
 using Surging.Core.Caching.Configurations;
+using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.CPlatform.Utilities;
 using Surging.Core.EventBusRabbitMQ.Configurations;
 using Surging.Core.ProxyGenerator;
 using Surging.IModuleServices.Common;
+using Surging.IModuleServices.Common.Models;
 using Surging.IModuleServices.Common.Models.Events;
 using System;
 using System.Collections.Generic;
@@ -20,10 +25,8 @@ namespace Surging.Services.Client
     public class Startup
     {
         private ContainerBuilder _builder;
-        public Startup()
+        public Startup(IConfigurationBuilder config)
         {
-            var config = new ConfigurationBuilder()
-           .SetBasePath(AppContext.BaseDirectory);
             ConfigureEventBus(config);
             ConfigureCache(config);
         }
@@ -40,8 +43,7 @@ namespace Surging.Services.Client
 
         public void Configure(IContainer app)
         {
-            app.Resolve<ILoggerFactory>()
-                    .AddConsole((c, l) => (int)l >= 3);
+           
         }
 
         #region 私有方法
@@ -68,26 +70,58 @@ namespace Surging.Services.Client
             build
               .AddCacheFile("cacheSettings.json", optional: false);
         }
-        
+
         /// <summary>
         /// 测试
         /// </summary>
         /// <param name="serviceProxyFactory"></param>
         public static void Test(IServiceProxyFactory serviceProxyFactory)
         {
+            var  tracingContext =  ServiceLocator.GetService<ITracingContext>();
             Task.Run(async () =>
             {
+                RpcContext.GetContext().SetAttachment("xid",124);
 
                 var userProxy = serviceProxyFactory.CreateProxy<IUserService>("User");
-                await userProxy.GetUserId("user");
+                var context = tracingContext.CreateEntrySegmentContext("SetSexTestAsync", new TextCarrierHeaderCollection(new Dictionary<string, string>()));
+                var e = userProxy.SetSex(Sex.Woman).GetAwaiter().GetResult();
+                context.Span.AddLog(LogEvent.Message($"Worker running at: {DateTime.Now}"));
+                tracingContext.Release(context);
+                 context = tracingContext.CreateEntrySegmentContext("GetUserIdTestAsync", new TextCarrierHeaderCollection(new Dictionary<string, string>()));
+                var v = userProxy.GetUserId("fanly").GetAwaiter().GetResult();
+                context.Span.AddLog(LogEvent.Message($"Worker running at: {DateTime.Now}"));
+                tracingContext.Release(context);
+                var fa = userProxy.GetUserName(1).GetAwaiter().GetResult();
+                userProxy.Try().GetAwaiter().GetResult();
+                var v1 = userProxy.GetUserLastSignInTime(1).Result;
+                var things = userProxy.GetAllThings().Result;
+                var apiResult = userProxy.GetApiResult().GetAwaiter().GetResult();
+                userProxy.PublishThroughEventBusAsync(new UserEvent
+                {
+                    UserId = 1,
+                    Name = "fanly"
+                }).Wait();
+
+                userProxy.PublishThroughEventBusAsync(new UserEvent
+                {
+                    UserId = 1,
+                    Name = "fanly"
+                }).Wait();
+
+                var r = await userProxy.GetDictionary();
+                var serviceProxyProvider = ServiceLocator.GetService<IServiceProxyProvider>();
+
                 do
                 {
                     Console.WriteLine("正在循环 1w次调用 GetUser.....");
+
                     //1w次调用
                     var watch = Stopwatch.StartNew();
                     for (var i = 0; i < 10000; i++)
                     {
-                        var a = userProxy.GetDictionary().Result;
+                        //var a = userProxy.GetDictionary().Result;
+                        var a = await userProxy.GetDictionary();
+                        //var result = serviceProxyProvider.Invoke<object>(new Dictionary<string, object>(), "api/user/GetDictionary", "User").Result;
                     }
                     watch.Stop();
                     Console.WriteLine($"1w次调用结束，执行时间：{watch.ElapsedMilliseconds}ms");
@@ -103,9 +137,9 @@ namespace Surging.Services.Client
         {
             serviceProxyFactory.CreateProxy<IUserService>("User").PublishThroughEventBusAsync(new UserEvent()
             {
-                Age = "18",
+                Age = 18,
                 Name = "fanly",
-                UserId = "1"
+                UserId = 1
             });
             Console.WriteLine("Press any key to exit...");
             Console.ReadLine();
@@ -118,7 +152,8 @@ namespace Surging.Services.Client
             {
                 Name = "fanly",
                 Age = 18,
-                UserId = 1
+                UserId = 1,
+                Sex = "Man"
             }));
             string path = "api/user/getuser";
             string serviceKey = "User";

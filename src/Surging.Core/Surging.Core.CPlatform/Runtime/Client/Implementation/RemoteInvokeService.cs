@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Surging.Core.CPlatform.Address;
 using Surging.Core.CPlatform.Exceptions;
+using Surging.Core.CPlatform.HashAlgorithms;
 using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Runtime.Client.Address.Resolvers;
 using Surging.Core.CPlatform.Runtime.Client.HealthChecks;
@@ -12,6 +13,9 @@ using System.Threading.Tasks;
 
 namespace Surging.Core.CPlatform.Runtime.Client.Implementation
 {
+    /// <summary>
+    /// 远程调用服务
+    /// </summary>
     public class RemoteInvokeService : IRemoteInvokeService
     {
         private readonly IAddressResolver _addressResolver;
@@ -19,7 +23,7 @@ namespace Surging.Core.CPlatform.Runtime.Client.Implementation
         private readonly ILogger<RemoteInvokeService> _logger;
         private readonly IHealthCheckService _healthCheckService;
 
-        public RemoteInvokeService(IAddressResolver addressResolver, ITransportClientFactory transportClientFactory, ILogger<RemoteInvokeService> logger, IHealthCheckService healthCheckService)
+        public RemoteInvokeService(IHashAlgorithm hashAlgorithm,IAddressResolver addressResolver, ITransportClientFactory transportClientFactory, ILogger<RemoteInvokeService> logger, IHealthCheckService healthCheckService)
         {
             _addressResolver = addressResolver;
             _transportClientFactory = transportClientFactory;
@@ -37,15 +41,16 @@ namespace Surging.Core.CPlatform.Runtime.Client.Implementation
         public async Task<RemoteInvokeResultMessage> InvokeAsync(RemoteInvokeContext context, CancellationToken cancellationToken)
         {
             var invokeMessage = context.InvokeMessage;
-            var address = await ResolverAddress(context);
+            AddressModel address = null;
+            var vt = ResolverAddress(context, context.Item);
+            address = vt.IsCompletedSuccessfully? vt.Result: await vt; 
             try
             {
                 var endPoint = address.CreateEndPoint();
-                invokeMessage.Token = address.Token;
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug($"使用地址：'{endPoint}'进行调用。");
-                var client = _transportClientFactory.CreateClient(endPoint);
-                return await client.SendAsync(invokeMessage).WithCancellation(cancellationToken);
+                var client =await _transportClientFactory.CreateClientAsync(endPoint);
+                return await client.SendAsync(invokeMessage,cancellationToken).WithCancellation(cancellationToken);
             }
             catch (CommunicationException)
             {
@@ -62,15 +67,20 @@ namespace Surging.Core.CPlatform.Runtime.Client.Implementation
         public async Task<RemoteInvokeResultMessage> InvokeAsync(RemoteInvokeContext context, int requestTimeout)
         {
             var invokeMessage = context.InvokeMessage;
-            var address = await ResolverAddress(context);
+            AddressModel address = null;
+            var vt = ResolverAddress(context, context.Item);
+            address = vt.IsCompletedSuccessfully ? vt.Result : await vt;
             try
             {
                 var endPoint = address.CreateEndPoint();
-                invokeMessage.Token = address.Token;
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug($"使用地址：'{endPoint}'进行调用。");
-                var client = _transportClientFactory.CreateClient(endPoint);
-                return await client.SendAsync(invokeMessage).WithCancellation(requestTimeout);
+                var task = _transportClientFactory.CreateClientAsync(endPoint);
+                var client= task.IsCompletedSuccessfully ? task.Result : await task;
+                using (var cts = new CancellationTokenSource())
+                {
+                    return await client.SendAsync(invokeMessage, cts.Token).WithCancellation(cts, requestTimeout);
+                }
             }
             catch (CommunicationException)
             {
@@ -79,12 +89,12 @@ namespace Surging.Core.CPlatform.Runtime.Client.Implementation
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, $"发起请求中发生了错误，服务Id：{invokeMessage.ServiceId}。");
+                _logger.LogError(exception, $"发起请求中发生了错误，服务Id：{invokeMessage.ServiceId}。错误信息：{exception.Message}");
                 throw;
             }
         }
 
-        private async ValueTask<AddressModel> ResolverAddress(RemoteInvokeContext context)
+        private async ValueTask<AddressModel> ResolverAddress(RemoteInvokeContext context,string item)
         {
             if (context == null)
                 throw new ArgumentNullException(nameof(context));
@@ -94,9 +104,11 @@ namespace Surging.Core.CPlatform.Runtime.Client.Implementation
 
             if (string.IsNullOrEmpty(context.InvokeMessage.ServiceId))
                 throw new ArgumentException("服务Id不能为空。", nameof(context.InvokeMessage.ServiceId));
-            var invokeMessage = context.InvokeMessage;
-            var hashCode = context.InvokeMessage.Parameters.GetHashCode();
-            var address = await _addressResolver.Resolver(invokeMessage.ServiceId, hashCode);
+            //远程调用信息
+            var invokeMessage = context.InvokeMessage; 
+            //解析服务地址
+            var vt =  _addressResolver.Resolver(invokeMessage.ServiceId, item);
+            var address = vt.IsCompletedSuccessfully ? vt.Result : await vt;
             if (address == null)
                 throw new CPlatformException($"无法解析服务Id：{invokeMessage.ServiceId}的地址信息。");
             return address;

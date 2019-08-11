@@ -41,11 +41,7 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation.ServiceDiscovery.
         /// <returns>服务条目集合。</returns>
         public IEnumerable<ServiceEntry> GetEntries()
         {
-            var services = _types.Where(i =>
-            {
-                var typeInfo = i.GetTypeInfo();
-                return typeInfo.IsInterface && typeInfo.GetCustomAttribute<ServiceBundleAttribute>() != null && _serviceProvider.Current.IsRegistered(i);
-            }).Distinct().ToArray();
+            var services = GetTypes();
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -57,6 +53,35 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation.ServiceDiscovery.
                 entries.AddRange( _clrServiceEntryFactory.CreateServiceEntry(service));
             }
             return entries;
+        }
+
+        public IEnumerable<ServiceEntry> GetALLEntries()
+        {
+            var services = _types.Where(i =>
+            {
+                var typeInfo = i.GetTypeInfo();
+                return typeInfo.IsInterface && typeInfo.GetCustomAttribute<ServiceBundleAttribute>() != null;
+            }).Distinct().ToArray();
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation($"发现了以下服务：{string.Join(",", services.Select(i => i.ToString()))}。");
+            }
+            var entries = new List<ServiceEntry>();
+            foreach (var service in services)
+            {
+                entries.AddRange(_clrServiceEntryFactory.CreateServiceEntry(service));
+            }
+            return entries;
+        }
+
+        public IEnumerable<Type> GetTypes()
+        {
+            var services = _types.Where(i =>
+            {
+                var typeInfo = i.GetTypeInfo();
+                return typeInfo.IsInterface && typeInfo.GetCustomAttribute<ServiceBundleAttribute>() != null && _serviceProvider.Current.IsRegistered(i);
+            }).Distinct().ToArray();
+            return services;
         }
 
         #endregion Implementation of IServiceEntryProvider

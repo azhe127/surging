@@ -22,7 +22,21 @@ namespace Surging.Core.ProxyGenerator.Interceptors.Implementation
         public IInvocation GetInvocation(object proxy, IDictionary<string, object> parameters,
             string serviceId,Type returnType)
         {
-            var entry = (from q in _serviceEntryManager.GetEntries()
+            var constructor = InvocationMethods.CompositionInvocationConstructor;
+            return constructor.Invoke(new object[]{
+                    parameters,
+                    serviceId,
+                    null,
+                    null,
+                    returnType,
+                    proxy
+                }) as IInvocation;
+        }
+
+        public IInvocation GetCacheInvocation(object proxy, IDictionary<string, object> parameters,
+    string serviceId, Type returnType)
+        {
+            var entry = (from q in _serviceEntryManager.GetAllEntries()
                          let k = q.Attributes
                          where q.Descriptor.Id == serviceId
                          select q).FirstOrDefault();

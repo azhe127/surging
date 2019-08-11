@@ -1,26 +1,54 @@
 ﻿using Autofac;
-using Autofac.Core;
 using Surging.Core.CPlatform.DependencyResolution;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
 
 namespace Surging.Core.CPlatform
 {
-   public class CPlatformContainer
+    /// <summary>
+    /// 平台容器
+    /// </summary>
+    public class CPlatformContainer
     {
-        private readonly IComponentContext _container;
+        private  IComponentContext _container;
 
-        public IComponentContext Current => _container;
+        public IComponentContext Current
+        {
+            get
+            {
+                return _container;
+            }
+           internal set
+            {
+                _container = value;
+            }
+        }
 
         public CPlatformContainer(IComponentContext container)
         {
             this._container = container;
         }
+
+        public bool IsRegistered<T>()
+        {
+            return _container.IsRegistered<T>();
+        }
+
+        public bool IsRegisteredWithKey(string serviceKey,Type serviceType)
+        {
+            if(!string.IsNullOrEmpty(serviceKey))
+            return _container.IsRegisteredWithKey(serviceKey, serviceType);
+            else
+                return _container.IsRegistered(serviceType);
+        }
+        
+        public bool IsRegistered<T>(object serviceKey)
+        {
+            return _container.IsRegisteredWithKey<T>(serviceKey);
+        }
+
         public  T GetInstances<T>(string name) where T : class
         {
+     
             return _container.ResolveKeyed<T>(name);
         }
 
@@ -37,6 +65,11 @@ namespace Surging.Core.CPlatform
         public T GetInstances<T>(Type type) where T : class
         {
             return _container.Resolve(type) as T;
+        }
+
+        public object GetInstancePerLifetimeScope(string name, Type type)
+        {
+           return string.IsNullOrEmpty(name) ? GetInstances(type) : _container.ResolveKeyed(name, type);
         }
 
         public object GetInstances(string name,Type type)  

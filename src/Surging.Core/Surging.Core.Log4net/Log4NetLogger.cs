@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Xml;
 
@@ -28,9 +29,10 @@ namespace Surging.Core.Log4net
 
         public IDisposable BeginScope<TState>(TState state)
         {
-            throw new NotImplementedException();
+            return NoopDisposable.Instance;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsEnabled(LogLevel logLevel)
         {
             switch (logLevel)
@@ -93,6 +95,15 @@ namespace Surging.Core.Log4net
                         _log.Info(message, exception);
                         break;
                 }
+            }
+        }
+
+        private class NoopDisposable : IDisposable
+        {
+            public static NoopDisposable Instance = new NoopDisposable();
+
+            public void Dispose()
+            {
             }
         }
     }

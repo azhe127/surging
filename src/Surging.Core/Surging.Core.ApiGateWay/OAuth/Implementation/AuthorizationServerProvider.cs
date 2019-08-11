@@ -10,37 +10,40 @@ using System.Threading.Tasks;
 using System.Linq;
 using Surging.Core.Caching;
 using System.Text.RegularExpressions;
+using Surging.Core.CPlatform.Cache;
 
 namespace Surging.Core.ApiGateWay.OAuth
 {
+    /// <summary>
+    /// 授权服务提供者
+    /// </summary>
     public class AuthorizationServerProvider: IAuthorizationServerProvider
     {
         private readonly IServiceProxyProvider _serviceProxyProvider;
         private readonly IServiceRouteProvider _serviceRouteProvider;
         private readonly CPlatformContainer _serviceProvider;
         private readonly ICacheProvider _cacheProvider;
-        public AuthorizationServerProvider(ConfigInfo configInfo, IServiceProxyProvider serviceProxyProvider
+        public AuthorizationServerProvider(IServiceProxyProvider serviceProxyProvider
            ,IServiceRouteProvider serviceRouteProvider
             , CPlatformContainer serviceProvider)
         {
             _serviceProvider = serviceProvider;
             _serviceProxyProvider = serviceProxyProvider;
             _serviceRouteProvider = serviceRouteProvider;
-            _cacheProvider = CacheContainer.GetInstances<ICacheProvider>(AppConfig.CacheMode);
+            _cacheProvider = CacheContainer.GetService<ICacheProvider>(AppConfig.CacheMode);
         }
 
         public async Task<string> GenerateTokenCredential(Dictionary<string, object> parameters)
         {
             string result = null;
             var payload = await _serviceProxyProvider.Invoke<object>(parameters,AppConfig.AuthorizationRoutePath, AppConfig.AuthorizationServiceKey);
-            if (payload != null)
+            if (payload!=null && !payload.Equals("null") )
             {
                 var jwtHeader = JsonConvert.SerializeObject(new JWTSecureDataHeader() { TimeStamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss") });
                 var base64Payload = ConverBase64String(JsonConvert.SerializeObject(payload));
                 var encodedString = $"{ConverBase64String(jwtHeader)}.{base64Payload}";
                 var route = await _serviceRouteProvider.GetRouteByPath(AppConfig.AuthorizationRoutePath);
-                var addressModel = route.Address.FirstOrDefault();
-                var signature = HMACSHA256(encodedString, addressModel.Token);
+                var signature = HMACSHA256(encodedString, route.ServiceDescriptor.Token);
                 result= $"{encodedString}.{signature}";
                 _cacheProvider.Add(base64Payload, result,AppConfig.AccessTokenExpireTimeSpan);
             }

@@ -24,19 +24,21 @@ namespace Surging.Core.CPlatform.Support.Implementation
             {
                 manager.Changed += ServiceCommandManager_Removed;
                 manager.Removed += ServiceCommandManager_Removed;
+                manager.Created += ServiceCommandManager_Add;
             }
         }
 
-        public override ValueTask<ServiceCommand> GetCommand(string serviceId)
+        public override async  ValueTask<ServiceCommand> GetCommand(string serviceId)
         {
             var result = _serviceCommand.GetValueOrDefault(serviceId);
             if (result == null)
             {
-                return new ValueTask<ServiceCommand>(GetCommandAsync(serviceId));
+                var task = GetCommandAsync(serviceId);
+                return task.IsCompletedSuccessfully ? task.Result : await task;
             }
             else
             {
-                return new ValueTask<ServiceCommand>(result);
+                return result;
             }
         }
 
@@ -67,6 +69,11 @@ namespace Surging.Core.CPlatform.Support.Implementation
             _serviceCommand.TryRemove(e.Command.ServiceId, out value);
         }
 
+        public void ServiceCommandManager_Add(object sender, ServiceCommandEventArgs e)
+        { 
+            _serviceCommand.GetOrAdd(e.Command.ServiceId, e.Command);
+        }
+
         public ServiceCommand ConvertServiceCommand(CommandAttribute command)
         {
             var result = new ServiceCommand();
@@ -78,6 +85,7 @@ namespace Surging.Core.CPlatform.Support.Implementation
                     ExecutionTimeoutInMilliseconds = command.ExecutionTimeoutInMilliseconds,
                     FailoverCluster = command.FailoverCluster,
                     Injection = command.Injection,
+                    ShuntStrategy = command.ShuntStrategy,
                     RequestCacheEnabled = command.RequestCacheEnabled,
                     Strategy = command.Strategy,
                     InjectionNamespaces = command.InjectionNamespaces,
@@ -104,6 +112,7 @@ namespace Surging.Core.CPlatform.Support.Implementation
                     Injection = command.Injection,
                     RequestCacheEnabled = command.RequestCacheEnabled,
                     Strategy = command.Strategy,
+                    ShuntStrategy = command.ShuntStrategy,
                     InjectionNamespaces = command.InjectionNamespaces,
                     BreakeErrorThresholdPercentage = command.BreakeErrorThresholdPercentage,
                     BreakerForceClosed = command.BreakerForceClosed,

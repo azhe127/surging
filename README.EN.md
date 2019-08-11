@@ -1,5 +1,5 @@
 # surging 　　　　　　　　　　　　　　　　　　　　[中文](https://github.com/dotnetcore/surging/blob/master/README.md)
-[![Member project of .NET China Foundation](https://github.com/dotnetcore/Home/blob/master/icons/member-project-of-netchina.png)](https://github.com/dotnetcore)
+[![Member project of .NET Core Community](https://img.shields.io/badge/member%20project%20of-NCC-9e20c9.svg)](https://github.com/dotnetcore)
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://mit-license.org/)
 # surging is a distributed micro service framework that provides high-performance RPC remote service calls, using Zookeeper, Consul as the registration center for surging services, integrating hash, random, polling as a load balancing algorithm, RPC integration using the netty framework, Using asynchronous transmission.
 <br />
@@ -132,6 +132,6 @@ IDE:Visual Studio 2017 15.3 Preview ,vscode
 <br/>
 The framework：.NET core 2.0
 <br/>
-如有任何问题可以加入QQ群：615562965 Gitter:not room
+如有任何问题可以加入QQ群：542283494 Gitter:not room
 <br/>
 [Blog]:https://www.cnblogs.com/fanliang11

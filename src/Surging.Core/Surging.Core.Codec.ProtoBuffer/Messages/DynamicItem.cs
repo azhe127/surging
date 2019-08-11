@@ -2,6 +2,7 @@
 using Newtonsoft.Json.Linq;
 using ProtoBuf;
 using Surging.Core.Codec.ProtoBuffer.Utilities;
+using Surging.Core.CPlatform.Utilities;
 using System;
 using System.Reflection;
 
@@ -28,7 +29,7 @@ namespace Surging.Core.Codec.ProtoBuffer.Messages
                 TypeName = valueType.FullName;
             else
                 TypeName = valueType.AssemblyQualifiedName;
-            if (valueType == typeof(JObject))
+            if (valueType == UtilityType.JObjectType || valueType == UtilityType.JArrayType)
                 Content = SerializerUtilitys.Serialize(value.ToString());
             else
                 Content = SerializerUtilitys.Serialize(value);
@@ -50,10 +51,10 @@ namespace Surging.Core.Codec.ProtoBuffer.Messages
             if (Content == null || TypeName == null)
                 return null;
             var typeName = Type.GetType(TypeName);
-            if (typeName == typeof(JObject))
+            if (typeName == UtilityType.JObjectType || typeName == UtilityType.JArrayType)
             {
                 var content = SerializerUtilitys.Deserialize<string>(Content);
-                return JsonConvert.DeserializeObject<JObject>(content);
+                return JsonConvert.DeserializeObject(content, typeName);
             }
             else
             {

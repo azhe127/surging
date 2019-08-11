@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Net;
 
 namespace Surging.Core.CPlatform.Address
@@ -14,15 +15,8 @@ namespace Surging.Core.CPlatform.Address
         /// <returns></returns>
         public abstract EndPoint CreateEndPoint();
 
-        /// <summary>
-        /// 访问的令牌
-        /// </summary>
-        public string Token { get; set; }
-
-        /// <summary>
-        /// 是否禁用令牌验证
-        /// </summary>
-        public bool DisableAuth { get; set; }
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public decimal ProcessorTime { get; set; }
         /// <summary>
         /// 重写后的标识。
         /// </summary>

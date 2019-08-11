@@ -1,6 +1,8 @@
 ﻿using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 
@@ -10,23 +12,35 @@ namespace Surging.Core.ServiceHosting.Internal.Implementation
     {
         private readonly List<Action<IServiceCollection>> _configureServicesDelegates;
         private readonly List<Action<ContainerBuilder>> _registerServicesDelegates;
+        private readonly List<Action<IConfigurationBuilder>> _configureDelegates;
         private readonly List<Action<IContainer>> _mapServicesDelegates;
+        private  Action<ILoggingBuilder> _loggingDelegate;
 
         public ServiceHostBuilder()
         {
             _configureServicesDelegates = new List<Action<IServiceCollection>>();
             _registerServicesDelegates = new List<Action<ContainerBuilder>>();
+            _configureDelegates = new List<Action<IConfigurationBuilder>>();
             _mapServicesDelegates = new List<Action<IContainer>>();
+
         }
 
         public IServiceHost Build()
         {
+           
             var services = BuildCommonServices();
+            var config = Configure();
+            if(_loggingDelegate!=null)
+            services.AddLogging(_loggingDelegate);
+            else
+                services.AddLogging();
+            services.AddSingleton(typeof(IConfigurationBuilder), config);
             var hostingServices = RegisterServices();
             var applicationServices = services.Clone();
             var hostingServiceProvider = services.BuildServiceProvider();
             hostingServices.Populate(services);
-            var host = new ServiceHost(hostingServices,hostingServiceProvider, _mapServicesDelegates);
+            var hostLifetime = hostingServiceProvider.GetService<IHostLifetime>();
+            var host = new ServiceHost(hostingServices,hostingServiceProvider, hostLifetime,_mapServicesDelegates);
             var container= host.Initialize();
             return host;
         }
@@ -61,6 +75,16 @@ namespace Surging.Core.ServiceHosting.Internal.Implementation
             return this;
         }
 
+        public IServiceHostBuilder Configure(Action<IConfigurationBuilder> builder)
+        {
+            if (builder == null)
+            {
+                throw new ArgumentNullException(nameof(builder));
+            }
+            _configureDelegates.Add(builder);
+            return this; 
+        }
+
         private IServiceCollection BuildCommonServices()
         {
             var services = new ServiceCollection();
@@ -69,6 +93,16 @@ namespace Surging.Core.ServiceHosting.Internal.Implementation
                 configureServices(services);
             }
             return services;
+        }
+
+        private IConfigurationBuilder Configure()
+        {
+            var config = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory); 
+            foreach (var configure in _configureDelegates)
+            {
+                configure(config);
+            }
+            return config;
         }
         
         private ContainerBuilder RegisterServices()
@@ -79,6 +113,16 @@ namespace Surging.Core.ServiceHosting.Internal.Implementation
                 registerServices(hostingServices);
             }
             return hostingServices;
+        }
+
+        public IServiceHostBuilder ConfigureLogging(Action<ILoggingBuilder> configure)
+        {
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
+            _loggingDelegate=configure;
+            return this;
         }
     }
 }
